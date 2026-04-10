@@ -1,6 +1,8 @@
 const { validationResult, body } = require('express-validator');
 const Room = require('../models/Room');
 const Building = require('../models/Building');
+const Timetable = require('../models/Timetable');
+const TimetableCell = require('../models/TimetableCell');
 
 const roomValidation = [
   body('name')
@@ -200,12 +202,29 @@ const deleteRoom = async (req, res) => {
       });
     }
 
-    room.isDeleted = true;
-    await room.save();
+    // Hard-delete the room
+    await room.deleteOne();
+
+    // Cascade: hard-delete all timetables for this room
+    const timetablesToDelete = await Timetable.find({ room: room._id }).select('_id').lean();
+
+    const timetableIds = timetablesToDelete.map(t => t._id);
+    let timetableCount = 0;
+
+    if (timetableIds.length > 0) {
+      const ttResult = await Timetable.deleteMany({ _id: { $in: timetableIds } });
+      timetableCount = ttResult.deletedCount || 0;
+
+      // Cascade: hard-delete all timetable cells linked to those timetables
+      await TimetableCell.deleteMany({ timetableId: { $in: timetableIds } });
+    }
 
     return res.status(200).json({
       success: true,
-      message: 'Room deleted successfully'
+      message: 'Room deleted successfully',
+      cascade: {
+        timetablesDeleted: timetableCount
+      }
     });
   } catch (err) {
     console.error('DeleteRoom error:', err);

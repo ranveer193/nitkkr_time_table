@@ -124,9 +124,16 @@ export default function SuperAdminDashboard() {
     timetables: useCallback(async () => {
       setLoading((l) => ({ ...l, timetables: true }));
       try {
-        const [ttRes, dRes] = await Promise.all([timetableAPI.getAll(), departmentAPI.getAll()]);
+        const [ttRes, dRes, bldRes, roomsRes] = await Promise.all([
+          timetableAPI.getAll(),
+          departmentAPI.getAll(),
+          buildingAPI.getAll(),
+          roomAPI.getAll(),
+        ]);
         setTimetables(ttRes.data?.data || ttRes.data || []);
         setDepartments(dRes.data?.data || dRes.data || []);
+        setBuildings(bldRes.data?.data || bldRes.data || []);
+        setRooms(roomsRes.data?.data || roomsRes.data || []);
       } finally {
         setLoading((l) => ({ ...l, timetables: false }));
       }
@@ -198,11 +205,12 @@ export default function SuperAdminDashboard() {
   function deleteBuilding(b) {
     confirmDelete(
       'Delete Building',
-      `Delete building "${b.name}"? All rooms in this building will also be affected.`,
+      `Deleting this building will permanently remove all associated rooms and timetables. This action cannot be undone.`,
       async () => {
         await buildingAPI.delete(b._id);
-        toast.success('Building deleted');
+        toast.success('Building deleted successfully');
         loaders.buildings();
+        loadStats();
       }
     );
   }
@@ -211,11 +219,12 @@ export default function SuperAdminDashboard() {
   function deleteRoom(r) {
     confirmDelete(
       'Delete Room',
-      `Delete room "${r.name}"?`,
+      `Deleting this room will remove all associated timetables. This action cannot be undone.`,
       async () => {
         await roomAPI.delete(r._id);
-        toast.success('Room deleted');
+        toast.success('Room deleted successfully');
         loaders.rooms();
+        loadStats();
       }
     );
   }
@@ -261,27 +270,43 @@ export default function SuperAdminDashboard() {
 
   // ─── Filtered timetables ──────────────────────────────────────────────────────
   const filteredTimetables = timetables.filter((tt) => {
-    return ttSearch
-      ? (tt.title || '').toLowerCase().includes(ttSearch.toLowerCase())
-      : true;
+    if (!ttSearch) return true;
+    const s = ttSearch.toLowerCase();
+    const titleMatch = (tt.title || '').toLowerCase().includes(s);
+    const buildingMatch = (tt.building?.name || '').toLowerCase().includes(s) || (tt.building?.code || '').toLowerCase().includes(s);
+    const roomMatch = (tt.room?.name || '').toLowerCase().includes(s);
+    return titleMatch || buildingMatch || roomMatch;
   });
 
-  // ─── Spinner ──────────────────────────────────────────────────────────────────
-  function Spinner() {
+  // ─── Skeleton Loader ──────────────────────────────────────────────────────────
+  function SkeletonRows({ count = 3 }) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <span className="w-6 h-6 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+      <div className="animate-fade-in">
+        {Array.from({ length: count }).map((_, i) => (
+          <div key={i} className="skeleton-row border-b border-slate-100 last:border-0">
+            <div className="skeleton h-9 w-9 rounded-full flex-shrink-0" />
+            <div className="flex-1 space-y-2">
+              <div className="skeleton h-4 w-2/3 rounded-md" />
+              <div className="skeleton h-3 w-1/3 rounded-md" />
+            </div>
+            <div className="skeleton h-8 w-20 rounded-lg flex-shrink-0" />
+          </div>
+        ))}
       </div>
     );
   }
 
-  function EmptyState({ message }) {
+  function EmptyState({ message, icon }) {
     return (
-      <div className="flex flex-col items-center justify-center py-12 text-slate-400">
-        <svg className="w-10 h-10 mb-3 text-slate-300" fill="none" viewBox="0 0 24 24" strokeWidth={1.3} stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-        </svg>
-        <p className="text-sm">{message}</p>
+      <div className="empty-state">
+        <div className="empty-state-icon">
+          {icon || (
+            <svg className="w-6 h-6 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.3} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+          )}
+        </div>
+        <p className="text-sm text-slate-400">{message}</p>
       </div>
     );
   }
@@ -342,7 +367,7 @@ export default function SuperAdminDashboard() {
             <h2 className="text-sm font-semibold text-slate-700">Pending Approval Requests</h2>
           </div>
           {loading.pending ? (
-            <Spinner />
+            <SkeletonRows />
           ) : pendingAdmins.length === 0 ? (
             <EmptyState message="No pending approval requests." />
           ) : (
@@ -391,7 +416,7 @@ export default function SuperAdminDashboard() {
             <h2 className="text-sm font-semibold text-slate-700">Department Admins</h2>
           </div>
           {loading.admins ? (
-            <Spinner />
+            <SkeletonRows />
           ) : activeAdmins.length === 0 ? (
             <EmptyState message="No department admins found." />
           ) : (
@@ -448,7 +473,7 @@ export default function SuperAdminDashboard() {
             </button>
           </div>
           {loading.departments ? (
-            <Spinner />
+            <SkeletonRows />
           ) : departments.length === 0 ? (
             <EmptyState message="No departments found. Create one to get started." />
           ) : (
@@ -501,7 +526,7 @@ export default function SuperAdminDashboard() {
             </button>
           </div>
           {loading.buildings ? (
-            <Spinner />
+            <SkeletonRows />
           ) : buildings.length === 0 ? (
             <EmptyState message="No buildings found. Add one to get started." />
           ) : (
@@ -554,7 +579,7 @@ export default function SuperAdminDashboard() {
             </button>
           </div>
           {loading.rooms ? (
-            <Spinner />
+            <SkeletonRows />
           ) : rooms.length === 0 ? (
             <EmptyState message="No rooms found. Add one to get started." />
           ) : (
@@ -621,7 +646,7 @@ export default function SuperAdminDashboard() {
 
           <div className="card">
             {loading.timetables ? (
-              <Spinner />
+              <SkeletonRows />
             ) : filteredTimetables.length === 0 ? (
               <EmptyState message="No timetables found." />
             ) : (
@@ -714,6 +739,7 @@ export default function SuperAdminDashboard() {
       <CreateTimetableModal
         isOpen={ttModal}
         departments={departments}
+        buildings={buildings}
         rooms={rooms}
         onClose={() => setTtModal(false)}
         onSaved={() => { loaders.timetables(); loadStats(); }}

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import Layout from '../components/Layout';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
 import { timetableAPI, buildingAPI, roomAPI } from '../services/api';
 import { exportTimetablePDF } from '../utils/pdfExport';
@@ -71,11 +71,16 @@ export default function AdminDashboard() {
   }
 
   const filteredTimetables = timetables.filter((tt) => {
-    const matchSearch = search
-      ? (tt.title || '').toLowerCase().includes(search.toLowerCase())
-      : true;
+    let matchSearch = true;
+    if (search) {
+      const s = search.toLowerCase();
+      const titleMatch = (tt.title || '').toLowerCase().includes(s);
+      const buildingMatch = (tt.building?.name || '').toLowerCase().includes(s) || (tt.building?.code || '').toLowerCase().includes(s);
+      const roomMatch = (tt.room?.name || '').toLowerCase().includes(s);
+      matchSearch = titleMatch || buildingMatch || roomMatch;
+    }
     const matchBuilding = buildingFilter
-      ? (tt.room?.building?._id || tt.room?.building) === buildingFilter
+      ? (tt.building?._id || tt.building) === buildingFilter
       : true;
     const matchRoom = roomFilter ? (tt.room?._id || tt.room) === roomFilter : true;
     return matchSearch && matchBuilding && matchRoom;
@@ -147,8 +152,23 @@ export default function AdminDashboard() {
 
       {/* Timetable list */}
       {loading ? (
-        <div className="flex items-center justify-center py-16">
-          <span className="w-6 h-6 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 animate-fade-in">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="card p-4 space-y-3">
+              <div className="flex justify-between">
+                <div className="skeleton h-5 w-3/4 rounded-md" />
+                <div className="skeleton h-5 w-12 rounded-full" />
+              </div>
+              <div className="space-y-2">
+                <div className="skeleton h-3 w-2/3 rounded-md" />
+                <div className="skeleton h-3 w-1/2 rounded-md" />
+              </div>
+              <div className="flex gap-2 mt-2">
+                <div className="skeleton h-8 flex-1 rounded-lg" />
+                <div className="skeleton h-8 flex-1 rounded-lg" />
+              </div>
+            </div>
+          ))}
         </div>
       ) : filteredTimetables.length === 0 ? (
         <div className="card flex flex-col items-center justify-center py-16 text-center">

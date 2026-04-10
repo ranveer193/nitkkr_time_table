@@ -152,6 +152,7 @@ const getTimetableById = async (req, res) => {
       isDeleted: false
     })
       .populate('department', 'name code color')
+      .populate('history.previousDepartment', 'name code color')
       .sort({ day: 1, period: 1 })
       .lean();
 
@@ -185,13 +186,8 @@ const deleteTimetable = async (req, res) => {
       });
     }
 
-    timetable.isDeleted = true;
-    await timetable.save();
-
-    await TimetableCell.updateMany(
-      { timetableId: timetable._id },
-      { $set: { isDeleted: true } }
-    );
+    await timetable.deleteOne();
+    await TimetableCell.deleteMany({ timetableId: timetable._id });
 
     return res.status(200).json({
       success: true,
@@ -311,6 +307,7 @@ const updateCell = async (req, res) => {
 
     const updated = await TimetableCell.findById(cell._id)
       .populate('department', 'name code color')
+      .populate('history.previousDepartment', 'name code color')
       .lean();
 
     return res.status(200).json({

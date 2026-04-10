@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import Layout from '../components/Layout';
 import CellHistoryModal from '../components/CellHistoryModal';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
 import { timetableAPI, departmentAPI } from '../services/api';
 import { exportTimetablePDF } from '../utils/pdfExport';
@@ -49,6 +49,24 @@ export default function TimetableView() {
       departmentAPI.getAll().then(res => setDepartments(res.data?.data || res.data || []));
     }
   }, [loadTimetable, isSuperAdmin]);
+
+  // ─── Build a color map for departments ──────────────────────────────────────
+  const deptColorMap = useMemo(() => {
+    const map = {};
+    if (!timetable?.cells) return map;
+    const uniqueDepts = [];
+    timetable.cells.forEach((c) => {
+      const deptId = c.department?._id || c.department;
+      if (deptId && !uniqueDepts.includes(deptId)) {
+        uniqueDepts.push(deptId);
+      }
+    });
+    uniqueDepts.forEach((deptId, idx) => {
+      const color = DEPARTMENT_COLORS[idx % DEPARTMENT_COLORS.length];
+      map[deptId] = color;
+    });
+    return map;
+  }, [timetable]);
 
   // ─── Get cell for a given day + period index ───────────────────────────────
   function getCell(day, periodIndex) {
@@ -126,20 +144,57 @@ export default function TimetableView() {
     }
   }
 
-  const days = timetable?.days || DAYS;
-  const periods = timetable?.periods || PERIODS;
+  const days = (timetable?.days && timetable.days.length > 0) ? timetable.days : DAYS;
+  const periodsCount = timetable?.periodsPerDay || PERIODS.length;
+  const periods = Array.from({ length: periodsCount }, (_, i) => {
+    if (PERIODS[i]) return PERIODS[i];
+    return { label: `Period ${i + 1}`, start: null, end: null };
+  });
 
+  // ─── Skeleton Loader ──────────────────────────────────────────────────────
   if (loading) {
     return (
       <Layout>
-        <div className="flex items-center justify-center py-24">
-          <span className="w-8 h-8 border-2 border-indigo-400 border-t-transparent rounded-full animate-spin" />
+        <div className="animate-fade-in">
+          {/* Header skeleton */}
+          <div className="mb-6 space-y-3">
+            <div className="skeleton h-5 w-24 rounded-lg" />
+            <div className="skeleton h-7 w-72 rounded-lg" />
+            <div className="flex gap-2">
+              <div className="skeleton h-5 w-20 rounded-full" />
+              <div className="skeleton h-5 w-20 rounded-full" />
+              <div className="skeleton h-5 w-16 rounded-full" />
+            </div>
+          </div>
+
+          {/* Table skeleton */}
+          <div className="timetable-wrapper p-1">
+            <div className="grid gap-px" style={{ gridTemplateColumns: `110px repeat(5, 1fr)` }}>
+              {Array.from({ length: 42 }).map((_, i) => (
+                <div key={i} className="skeleton-table-cell" />
+              ))}
+            </div>
+          </div>
         </div>
       </Layout>
     );
   }
 
   if (!timetable) return null;
+
+  // ─── Get department color styles for a cell ────────────────────────────────
+  function getDeptStyles(cell) {
+    const deptId = cell?.department?._id || cell?.department;
+    if (!deptId) return {};
+    const color = deptColorMap[deptId];
+    if (!color) return {};
+    return {
+      '--dept-color': color.border,
+      '--dept-bg': color.bg,
+      '--dept-bg-hover': color.bg,
+      '--dept-text': color.text,
+    };
+  }
 
   return (
     <Layout>
@@ -151,17 +206,31 @@ export default function TimetableView() {
               className="btn-ghost text-xs text-slate-400 mb-1 px-0"
               onClick={() => navigate(-1)}
             >
-              ← Back
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+              </svg>
+              Back
             </button>
             <h1 className="text-xl font-semibold text-slate-800">{timetable.title}</h1>
 
             {/* Metadata badges */}
             <div className="flex flex-wrap gap-2 mt-1.5">
-              {timetable.room?.building?.name && (
-                <span className="badge badge-slate">{timetable.room.building.name}</span>
+              {timetable.building?.name && (
+                <span className="badge badge-slate">
+                  <svg className="w-3 h-3 mr-1 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 21h19.5m-18-18v18m10.5-18v18m6-13.5V21M6.75 6.75h.75m-.75 3h.75m-.75 3h.75m3-6h.75m-.75 3h.75m-.75 3h.75M6.75 21v-3.375c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21M3 3h12m-.75 4.5H21m-3.75 3H21m-3.75 3H21" />
+                  </svg>
+                  {timetable.building.name}
+                </span>
               )}
               {timetable.room?.name && (
-                <span className="badge badge-slate">{timetable.room.name}</span>
+                <span className="badge badge-slate">
+                  <svg className="w-3 h-3 mr-1 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" />
+                  </svg>
+                  {timetable.room.name}
+                </span>
               )}
               {timetable.academicYear && (
                 <span className="badge badge-slate">{timetable.academicYear}</span>
@@ -173,12 +242,14 @@ export default function TimetableView() {
                 <span className="badge badge-emerald">Active</span>
               )}
             </div>
+
+            {/* Grid info */}
+            <p className="text-xs text-slate-400 mt-2">
+              {days.length} day{days.length !== 1 ? 's' : ''} × {periodsCount} period{periodsCount !== 1 ? 's' : ''} · {timetable.totalCells ?? days.length * periodsCount} cells · {timetable.filledCells ?? 0} filled
+            </p>
           </div>
 
           <div className="flex gap-2 flex-shrink-0">
-            {isSuperAdmin && (
-              <span className="badge badge-slate self-center">View Only</span>
-            )}
             <button
               id="export-pdf-btn"
               className="btn-secondary text-sm"
@@ -204,15 +275,20 @@ export default function TimetableView() {
       </div>
 
       {/* ─── Timetable Grid ─── */}
-      <div className="overflow-x-auto rounded-lg border border-slate-200 shadow-sm bg-white">
+      <div className="timetable-wrapper">
         <table className="w-full border-collapse text-sm" style={{ minWidth: '700px' }}>
           <thead>
             <tr>
-              <th className="timetable-cell bg-slate-50 font-semibold text-slate-700 text-left w-28">
-                Period
+              <th className="timetable-header-cell text-left w-28">
+                <div className="flex items-center gap-1.5">
+                  <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Period
+                </div>
               </th>
               {days.map((day) => (
-                <th key={day} className="timetable-cell bg-slate-50 font-semibold text-slate-700 text-center">
+                <th key={day} className="timetable-header-cell text-center">
                   {day}
                 </th>
               ))}
@@ -230,12 +306,12 @@ export default function TimetableView() {
                   : null;
 
               return (
-                <tr key={pIdx} className="hover:bg-slate-50 transition-colors">
+                <tr key={pIdx}>
                   {/* Period label */}
-                  <td className="timetable-cell bg-slate-50 font-medium text-slate-700 text-xs">
-                    <div>{periodLabel}</div>
+                  <td className="timetable-period-cell">
+                    <div className="font-semibold">{periodLabel}</div>
                     {periodTime && (
-                      <div className="text-slate-400 font-normal mt-0.5">{periodTime}</div>
+                      <div className="text-slate-400 font-normal mt-0.5 text-[11px]">{periodTime}</div>
                     )}
                   </td>
 
@@ -246,32 +322,41 @@ export default function TimetableView() {
                       editingCell &&
                       editingCell._id === cell?._id;
                     const editable = cellIsEditable(cell);
+                    const deptId = cell?.department?._id || cell?.department;
+                    const hasDept = Boolean(deptId);
+                    const deptStyles = getDeptStyles(cell);
+
+                    // Build cell class
+                    let cellClass;
+                    if (isEditing) {
+                      cellClass = 'timetable-cell animate-pulse-glow';
+                    } else if (hasDept) {
+                      cellClass = editable
+                        ? 'timetable-cell dept-cell cursor-pointer'
+                        : 'timetable-cell dept-cell';
+                    } else if (isSuperAdmin || editable) {
+                      cellClass = 'timetable-cell-editable';
+                    } else {
+                      cellClass = 'timetable-cell-empty';
+                    }
 
                     return (
                       <td
                         key={`${day}-${pIdx}`}
-                        className={
-                          isEditing
-                            ? 'timetable-cell bg-indigo-50 border-indigo-200'
-                            : cell?.department
-                              ? editable
-                                ? 'timetable-cell-editable rounded outline outline-1 outline-slate-200'
-                                : 'timetable-cell-locked'
-                              : isSuperAdmin
-                                ? 'timetable-cell-editable opacity-50 hover:bg-slate-50'
-                                : 'timetable-cell-empty'
-                        }
+                        className={cellClass}
+                        style={hasDept ? deptStyles : undefined}
                         onClick={() => {
                           if (editable && !isEditing && !editingCell) startEdit(cell);
                         }}
                       >
                         {isEditing ? (
-                          <div className="space-y-2 p-1" onClick={(e) => e.stopPropagation()}>
+                          <div className="space-y-2 p-1 animate-fade-in" onClick={(e) => e.stopPropagation()}>
                             {isSuperAdmin ? (
                               <select
                                 className="input py-1 px-2 text-xs w-full mb-1"
                                 value={editDept}
                                 onChange={(e) => setEditDept(e.target.value)}
+                                autoFocus
                               >
                                 <option value="">[Unassigned]</option>
                                 {departments.map(d => (
@@ -299,7 +384,12 @@ export default function TimetableView() {
                                 onClick={saveCell}
                                 disabled={saving}
                               >
-                                {saving ? '…' : 'Save'}
+                                {saving ? (
+                                  <span className="flex items-center gap-1">
+                                    <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                                    Saving
+                                  </span>
+                                ) : 'Save'}
                               </button>
                               <button
                                 className="btn-secondary py-0.5 px-2 text-xs"
@@ -310,44 +400,57 @@ export default function TimetableView() {
                               </button>
                             </div>
                           </div>
-                        ) : cell?.department ? (
+                        ) : hasDept ? (
                           // ── Has Assigned Department ──
-                          <div className="space-y-1">
+                          <div className="space-y-1 animate-cell-in">
                             {cell.subject ? (
-                              <div className="font-medium text-slate-800 text-xs leading-snug">
+                              <div className="dept-cell-subject">
                                 {cell.subject}
                               </div>
                             ) : (
                               <div className="text-slate-400 text-xs italic">[No subject]</div>
                             )}
-                            <span className={`badge ${t.badgeAccent} text-xs`}>
-                              {cell.department.name}
-                            </span>
+                            <div className="dept-cell-badge">
+                              {cell.department?.code || cell.department?.name || 'Dept'}
+                            </div>
                             <div className="flex items-center gap-1 mt-1">
                               {(cell.history?.length > 0) && (
                                 <button
                                   id={`history-${cell._id}`}
-                                  className="text-xs text-slate-400 hover:text-slate-600 underline"
+                                  className="text-[10px] text-slate-400 hover:text-slate-600 underline decoration-dotted"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     openHistory(cell);
                                   }}
                                 >
-                                  History ({cell.history.length})
+                                  <svg className="w-3 h-3 inline mr-0.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                  {cell.history.length}
                                 </button>
                               )}
                               {editable && (
-                                <span className="text-xs text-indigo-400 ml-auto">✎ edit</span>
+                                <span className="text-[10px] text-indigo-400 ml-auto flex items-center gap-0.5">
+                                  <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                                  </svg>
+                                  edit
+                                </span>
                               )}
                             </div>
                           </div>
                         ) : (
                           // ── Empty ──
-                          <div className="text-xs text-slate-300 text-center mt-2">
+                          <div className="text-xs text-slate-300 text-center flex items-center justify-center h-full">
                             {editable ? (
-                              <span className="text-indigo-400">+ Assign Dept</span>
+                              <span className="text-indigo-400 flex items-center gap-1">
+                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                                </svg>
+                                Assign
+                              </span>
                             ) : (
-                              <span className="text-slate-200">Empty</span>
+                              <span className="text-slate-200">—</span>
                             )}
                           </div>
                         )}
@@ -361,12 +464,38 @@ export default function TimetableView() {
         </table>
       </div>
 
+      {/* Legend */}
+      {Object.keys(deptColorMap).length > 0 && (
+        <div className="mt-4 card p-4">
+          <h3 className="text-xs font-semibold text-slate-600 mb-2 uppercase tracking-wider">Department Legend</h3>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(deptColorMap).map(([deptId, color]) => {
+              const dept = timetable.cells.find(c => (c.department?._id || c.department) === deptId)?.department;
+              const name = dept?.name || dept?.code || deptId;
+              return (
+                <span
+                  key={deptId}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium"
+                  style={{ background: color.bg, color: color.text, border: `1px solid ${color.border}` }}
+                >
+                  <span className="w-2 h-2 rounded-full" style={{ background: color.border }} />
+                  {name}
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* Edit instructions */}
-      <div className="mt-3 text-xs text-slate-400">
+      <div className="mt-3 flex items-center gap-2 text-xs text-slate-400">
+        <svg className="w-4 h-4 text-slate-300 flex-shrink-0" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 18v-5.25m0 0a6.01 6.01 0 001.5-.189m-1.5.189a6.01 6.01 0 01-1.5-.189m3.75 7.478a12.06 12.06 0 01-4.5 0m3.75 2.383a14.406 14.406 0 01-3 0M14.25 18v-.192c0-.983.658-1.823 1.508-2.316a7.5 7.5 0 10-7.517 0c.85.493 1.509 1.333 1.509 2.316V18" />
+        </svg>
         {isSuperAdmin ? (
-          <p>💡 Click any cell to assign or clear a department. You cannot edit the subject itself.</p>
+          <p>Click any cell to assign or clear a department. You cannot edit the subject itself.</p>
         ) : (
-          <p>💡 Click any highlighted cell to edit the subject. You can only edit cells assigned to your department.</p>
+          <p>Click any highlighted cell to edit the subject. You can only edit cells assigned to your department.</p>
         )}
       </div>
 

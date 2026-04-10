@@ -47,4 +47,6 @@ roomSchema.pre(/^find/, function (next) {
   next();
 });
 
+// Removed soft-delete cascade handling since we now use hard delete hooks/controllers
+
 module.exports = mongoose.model('Room', roomSchema);

@@ -2,9 +2,9 @@ import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { timetableAPI } from '../services/api';
 
-export default function CreateTimetableModal({ isOpen, departments, rooms, onClose, onSaved }) {
+export default function CreateTimetableModal({ isOpen, departments, rooms, buildings, onClose, onSaved }) {
   const [form, setForm] = useState({
-    title: '',
+    building: '',
     room: '',
     academicYear: '',
     semester: '',
@@ -18,7 +18,7 @@ export default function CreateTimetableModal({ isOpen, departments, rooms, onClo
   useEffect(() => {
     if (isOpen) {
       setForm({
-        title: '',
+        building: '',
         room: '',
         academicYear: new Date().getFullYear() + '-' + (new Date().getFullYear() + 1),
         semester: '',
@@ -40,9 +40,14 @@ export default function CreateTimetableModal({ isOpen, departments, rooms, onClo
 
   if (!isOpen) return null;
 
+  // Filter rooms by selected building
+  const filteredRooms = form.building
+    ? (rooms || []).filter((r) => (r.building?._id || r.building) === form.building)
+    : [];
+
   function validate() {
     const errs = {};
-    if (!form.title.trim()) errs.title = 'Timetable title is required';
+    if (!form.building) errs.building = 'Building is required';
     if (!form.room) errs.room = 'Room is required';
     if (form.days.length === 0) errs.days = 'Select at least one day';
     if (form.periodsPerDay < 1 || form.periodsPerDay > 16) errs.periodsPerDay = 'Periods must be between 1 and 16';
@@ -58,11 +63,9 @@ export default function CreateTimetableModal({ isOpen, departments, rooms, onClo
     }
     setLoading(true);
     try {
-      const selectedRoom = rooms.find(r => r._id === form.room);
       await timetableAPI.create({
-        title: form.title.trim(),
         roomId: form.room,
-        buildingId: selectedRoom?.building?._id || selectedRoom?.building,
+        buildingId: form.building,
         academicYear: form.academicYear.trim(),
         semester: form.semester.trim(),
         isActive: form.isActive,
@@ -89,9 +92,13 @@ export default function CreateTimetableModal({ isOpen, departments, rooms, onClo
     }));
   }
 
+  function handleBuildingChange(val) {
+    setForm(f => ({ ...f, building: val, room: '' }));
+  }
+
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="tt-modal-title">
-      <div className="modal-card">
+      <div className="modal-card max-w-lg">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
           <h2 id="tt-modal-title" className="text-base font-semibold text-slate-800">
@@ -105,19 +112,26 @@ export default function CreateTimetableModal({ isOpen, departments, rooms, onClo
         {/* Form */}
         <form onSubmit={handleSubmit} noValidate>
           <div className="px-6 py-4 space-y-4">
+            {/* Building selector */}
             <div>
-              <label htmlFor="tt-title" className="label">Title *</label>
-              <input
-                id="tt-title"
-                type="text"
+              <label htmlFor="tt-building" className="label">Building *</label>
+              <select
+                id="tt-building"
                 className="input"
-                placeholder="e.g. CSE-A Monday Schedule"
-                value={form.title}
-                onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
-              />
-              {errors.title && <p className="text-xs text-red-500 mt-1">{errors.title}</p>}
+                value={form.building}
+                onChange={(e) => handleBuildingChange(e.target.value)}
+              >
+                <option value="">Select building…</option>
+                {(buildings || []).map((b) => (
+                  <option key={b._id} value={b._id}>
+                    {b.name} ({b.code})
+                  </option>
+                ))}
+              </select>
+              {errors.building && <p className="text-xs text-red-500 mt-1">{errors.building}</p>}
             </div>
 
+            {/* Room selector — filtered by building */}
             <div>
               <label htmlFor="tt-room" className="label">Room *</label>
               <select
@@ -125,14 +139,18 @@ export default function CreateTimetableModal({ isOpen, departments, rooms, onClo
                 className="input"
                 value={form.room}
                 onChange={(e) => setForm((f) => ({ ...f, room: e.target.value }))}
+                disabled={!form.building}
               >
-                <option value="">Select room…</option>
-                {(rooms || []).map((r) => (
+                <option value="">{form.building ? 'Select room…' : 'Select a building first…'}</option>
+                {filteredRooms.map((r) => (
                   <option key={r._id} value={r._id}>
-                    {r.name} — {r.building?.name || 'Unknown Building'}
+                    {r.name}{r.floor !== undefined ? ` · Floor ${r.floor}` : ''}{r.capacity ? ` · Cap: ${r.capacity}` : ''}
                   </option>
                 ))}
               </select>
+              {form.building && filteredRooms.length === 0 && (
+                <p className="text-xs text-amber-600 mt-1">No rooms found for this building. Add a room first.</p>
+              )}
               {errors.room && <p className="text-xs text-red-500 mt-1">{errors.room}</p>}
             </div>
 
@@ -172,7 +190,7 @@ export default function CreateTimetableModal({ isOpen, departments, rooms, onClo
                     key={day}
                     type="button"
                     onClick={() => toggleDay(day)}
-                    className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${form.days.includes(day)
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${form.days.includes(day)
                         ? 'bg-indigo-600 text-white shadow-sm'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                       }`}
@@ -185,7 +203,7 @@ export default function CreateTimetableModal({ isOpen, departments, rooms, onClo
             </div>
 
             <div>
-              <label htmlFor="tt-periods" className="label">Periods Per Day *</label>
+              <label htmlFor="tt-periods" className="label">Periods Per Day * <span className="text-slate-400 font-normal">(max 16)</span></label>
               <input
                 id="tt-periods"
                 type="number"
@@ -197,6 +215,16 @@ export default function CreateTimetableModal({ isOpen, departments, rooms, onClo
               />
               {errors.periodsPerDay && <p className="text-xs text-red-500 mt-1">{errors.periodsPerDay}</p>}
             </div>
+
+            {/* Preview */}
+            {form.days.length > 0 && form.periodsPerDay > 0 && (
+              <div className="bg-slate-50 rounded-xl p-3 border border-slate-200/60">
+                <p className="text-xs text-slate-500">
+                  <span className="font-medium text-slate-700">Grid preview:</span>{' '}
+                  {form.days.length} day{form.days.length !== 1 ? 's' : ''} × {form.periodsPerDay} period{form.periodsPerDay !== 1 ? 's' : ''} = {form.days.length * form.periodsPerDay} cells
+                </p>
+              </div>
+            )}
 
             <div className="flex items-center gap-2">
               <input

@@ -29,10 +29,7 @@ router.get('/timetables', async (req, res) => {
 
 router.get('/timetable/:id', async (req, res) => {
   try {
-    const timetable = await Timetable.findOne({
-      _id: req.params.id,
-      isDeleted: false
-    })
+    const timetable = await Timetable.findById(req.params.id)
       .populate('building', 'name code')
       .populate('room', 'name floor capacity');
 

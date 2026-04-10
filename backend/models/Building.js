@@ -39,6 +39,8 @@ buildingSchema.pre(/^find/, function (next) {
   next();
 });
 
+// Removed soft-delete cascade handling since we now use hard delete hooks/controllers
+
 buildingSchema.index({ isDeleted: 1 });
 
 module.exports = mongoose.model('Building', buildingSchema);

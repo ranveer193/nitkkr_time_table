@@ -165,8 +165,7 @@ const deleteDepartment = async (req, res) => {
       });
     }
 
-    department.isDeleted = true;
-    await department.save();
+    await department.deleteOne();
 
     return res.status(200).json({
       success: true,

@@ -56,8 +56,9 @@ export function exportTimetablePDF(timetable) {
   doc.line(margin, 40, pageWidth - margin, 40);
 
   // ─── Build table data ──────────────────────────────────────────────────────
-  const periods = timetable.periods || PERIODS;
-  const days = timetable.days || DAYS;
+  const periodsCount = timetable?.periodsPerDay || PERIODS.length;
+  const periods = PERIODS.slice(0, periodsCount);
+  const days = (timetable?.days && timetable.days.length > 0) ? timetable.days : DAYS;
 
   // Collect all unique departments for color coding
   const deptMap = {};

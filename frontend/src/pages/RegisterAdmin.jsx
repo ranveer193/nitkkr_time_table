@@ -1,10 +1,21 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import { useTheme } from '../context/ThemeContext';
 import { departmentAPI } from '../services/api';
-import { useEffect } from 'react';
+
+// Field component OUTSIDE the render function to prevent re-mount on every keystroke
+function Field({ id, label, required, children }) {
+  return (
+    <div>
+      <label htmlFor={id} className="label">
+        {label} {required && <span className="text-red-400">*</span>}
+      </label>
+      {children}
+    </div>
+  );
+}
 
 export default function RegisterAdmin() {
   const { registerAdmin } = useAuth();
@@ -21,6 +32,17 @@ export default function RegisterAdmin() {
   });
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState({});
+
+  function handleChange(field, value) {
+    setForm((f) => ({ ...f, [field]: value }));
+    if (errors[field]) {
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
+    }
+  }
 
   useEffect(() => {
     departmentAPI
@@ -69,26 +91,17 @@ export default function RegisterAdmin() {
     }
   }
 
-  function Field({ id, label, required, children }) {
-    return (
-      <div>
-        <label htmlFor={id} className="label">
-          {label} {required && <span className="text-red-400">*</span>}
-        </label>
-        {children}
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-4 py-8">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-7">
           <div
-            className={`w-12 h-12 rounded-xl ${t.bg} text-white text-lg font-bold flex items-center justify-center mx-auto mb-3`}
+            className={`w-12 h-12 rounded-xl ${t.bg} text-white flex items-center justify-center mx-auto mb-3`}
           >
-            TT
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
+            </svg>
           </div>
           <h1 className="text-2xl font-semibold text-slate-800">Register as Department Admin</h1>
           <p className="text-sm text-slate-500 mt-1">
@@ -106,7 +119,7 @@ export default function RegisterAdmin() {
                 className="input"
                 placeholder="e.g. john.doe"
                 value={form.userId}
-                onChange={(e) => setForm((f) => ({ ...f, userId: e.target.value }))}
+                onChange={(e) => handleChange('userId', e.target.value)}
               />
               {errors.userId && <p className="text-xs text-red-500 mt-1">{errors.userId}</p>}
             </Field>
@@ -118,7 +131,7 @@ export default function RegisterAdmin() {
                 className="input"
                 placeholder="e.g. John Doe"
                 value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                onChange={(e) => handleChange('name', e.target.value)}
               />
               {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name}</p>}
             </Field>
@@ -130,7 +143,7 @@ export default function RegisterAdmin() {
                 className="input"
                 placeholder="e.g. john@college.edu"
                 value={form.email}
-                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                onChange={(e) => handleChange('email', e.target.value)}
               />
               {errors.email && <p className="text-xs text-red-500 mt-1">{errors.email}</p>}
             </Field>
@@ -140,7 +153,7 @@ export default function RegisterAdmin() {
                 id="reg-dept"
                 className="input"
                 value={form.department}
-                onChange={(e) => setForm((f) => ({ ...f, department: e.target.value }))}
+                onChange={(e) => handleChange('department', e.target.value)}
               >
                 <option value="">Select your department…</option>
                 {departments.map((d) => (
@@ -160,7 +173,7 @@ export default function RegisterAdmin() {
                   className="input"
                   placeholder="Min 8 characters"
                   value={form.password}
-                  onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+                  onChange={(e) => handleChange('password', e.target.value)}
                 />
                 {errors.password && <p className="text-xs text-red-500 mt-1">{errors.password}</p>}
               </Field>
@@ -172,7 +185,7 @@ export default function RegisterAdmin() {
                   className="input"
                   placeholder="Repeat password"
                   value={form.confirmPassword}
-                  onChange={(e) => setForm((f) => ({ ...f, confirmPassword: e.target.value }))}
+                  onChange={(e) => handleChange('confirmPassword', e.target.value)}
                 />
                 {errors.confirmPassword && (
                   <p className="text-xs text-red-500 mt-1">{errors.confirmPassword}</p>

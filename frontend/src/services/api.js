@@ -88,7 +88,7 @@ export const timetableAPI = {
 // ─── Public API ──────────────────────────────────────────────────────────────
 export const publicAPI = {
   getAllTimetables: (params) => api.get('/public/timetables', { params }),
-  getPublicTimetable: (id) => api.get(`/public/timetables/${id}`),
+  getPublicTimetable: (id) => api.get(`/public/timetable/${id}`),
 };
 
 export default api;

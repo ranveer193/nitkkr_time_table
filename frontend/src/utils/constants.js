@@ -7,17 +7,16 @@ export const ROLES = {
 
 export const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-export const PERIODS = [
-  { label: '1st Period', start: '08:00', end: '09:00' },
-  { label: '2nd Period', start: '09:00', end: '10:00' },
-  { label: '3rd Period', start: '10:00', end: '11:00' },
-  { label: '4th Period', start: '11:00', end: '12:00' },
-  { label: 'Lunch Break', start: '12:00', end: '13:00' },
-  { label: '5th Period', start: '13:00', end: '14:00' },
-  { label: '6th Period', start: '14:00', end: '15:00' },
-  { label: '7th Period', start: '15:00', end: '16:00' },
-  { label: '8th Period', start: '16:00', end: '17:00' },
-];
+export const PERIODS = Array.from({ length: 16 }, (_, i) => {
+  const startHour = 8 + i;
+  const formatTime = (h) => `${String(h).padStart(2, '0')}:00`;
+  const ordinals = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th', '11th', '12th', '13th', '14th', '15th', '16th'];
+  return {
+    label: `${ordinals[i] || (i + 1) + 'th'} Period`,
+    start: formatTime(startHour),
+    end: formatTime(startHour + 1)
+  };
+});
 
 export const APPROVAL_STATUS = {
   PENDING: 'PENDING',
